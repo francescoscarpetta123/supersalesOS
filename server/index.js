@@ -18,7 +18,7 @@ import {
   disconnectAccount,
   getRuntimeSnapshot,
   stopPoller,
-  kickStartAfterConnect,
+  triggerManualEmailProcessing,
 } from './engine.js';
 import { resolvePublicUrl, listenPortEnv } from './publicUrl.js';
 
@@ -123,12 +123,6 @@ app.get('/auth/google/callback', async (req, res) => {
   try {
     await handleOAuthCallback(code, String(state), req);
     await saveSession(req);
-    const userId = req.session.userId;
-    if (userId) {
-      void kickStartAfterConnect(userId).catch((err) => {
-        console.error('[kickStartAfterConnect]', userId, err);
-      });
-    }
     res.redirect(`${base}/?connected=1`);
   } catch (e) {
     try {
@@ -186,7 +180,8 @@ app.get('/api/status', (req, res) => {
       ingestionProgress: null,
       nextScanAt: null,
       nextScanInSec: null,
-      pollIntervalSec: 1800,
+      pollIntervalSec: null,
+      scanMode: 'manual',
       lastError: null,
       lastScannedAt: null,
       metrics: {
@@ -206,11 +201,6 @@ app.get('/api/status', (req, res) => {
   const criticalOpen = open.filter((a) => a.urgency === 'critical').length;
   const needsAction = open.length;
 
-  let nextScanInSec = null;
-  if (connected && rt?.nextScanAt) {
-    nextScanInSec = Math.max(0, Math.ceil((rt.nextScanAt - Date.now()) / 1000));
-  }
-
   const profile = loadProfile(userId);
 
   res.json({
@@ -220,9 +210,10 @@ app.get('/api/status', (req, res) => {
     initialIngestionComplete: store.ingestion.initialComplete,
     scanning: rt?.scanning ?? false,
     ingestionProgress: rt?.ingestionProgress ?? null,
-    nextScanAt: rt?.nextScanAt ?? null,
-    nextScanInSec,
-    pollIntervalSec: 1800,
+    nextScanAt: null,
+    nextScanInSec: null,
+    pollIntervalSec: null,
+    scanMode: 'manual',
     lastError: store.ingestion.lastError || rt?.lastScanError || null,
     lastScannedAt: store.ingestion.lastPollAt || null,
     metrics: {
@@ -275,6 +266,24 @@ app.get('/api/action-items', (req, res) => {
   res.json({ items, authenticated: true, maxItems: MAX_ACTION_ITEMS });
 });
 
+/** Start a one-shot Gmail sync (initial ingest or incremental poll). No background polling. */
+app.post('/api/scan', requireSessionUser, (req, res) => {
+  const userId = req.session.userId;
+  if (!loadTokens(userId)) {
+    res.status(400).json({ error: 'Connect Gmail first.' });
+    return;
+  }
+  const rt = getRuntimeSnapshot(userId);
+  if (rt?.scanning) {
+    res.status(409).json({ error: 'A scan is already in progress.' });
+    return;
+  }
+  void triggerManualEmailProcessing(userId).catch((err) => {
+    console.error('[manual scan]', userId, err);
+  });
+  res.status(202).json({ ok: true });
+});
+
 app.patch('/api/action-items/:id', requireSessionUser, (req, res) => {
   const userId = req.session.userId;
   const { id } = req.params;
@@ -299,7 +308,7 @@ app.post('/api/disconnect', requireSessionUser, (req, res) => {
   });
 });
 
-/** Sign out of the dashboard only (stops polling; tokens remain until disconnect). */
+/** Sign out of the dashboard only (session end; tokens remain until disconnect). */
 app.post('/api/logout', requireSessionUser, (req, res) => {
   const userId = req.session.userId;
   stopPoller(userId);

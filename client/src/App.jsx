@@ -16,16 +16,6 @@ const CATEGORIES = [
 
 const fetchOpts = { credentials: 'include' };
 
-const GMAIL_ONBOARDED_KEY = 'ssos_gmail_onboarded';
-
-function readGmailOnboarded() {
-  try {
-    return localStorage.getItem(GMAIL_ONBOARDED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 function formatTimeAgo(iso) {
   if (!iso) return 'never';
   const t = new Date(iso).getTime();
@@ -68,7 +58,7 @@ export default function App() {
   const [busyId, setBusyId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [gmailOnboarded, setGmailOnboarded] = useState(readGmailOnboarded);
+  const [scanStarting, setScanStarting] = useState(false);
   const oauthReturnHandled = useRef(false);
   const settingsWrapRef = useRef(null);
 
@@ -108,26 +98,13 @@ export default function App() {
     const p = new URLSearchParams(window.location.search);
     if (!p.get('connected') || oauthReturnHandled.current) return;
     oauthReturnHandled.current = true;
-    try {
-      localStorage.setItem(GMAIL_ONBOARDED_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-    setGmailOnboarded(true);
-    void refresh().finally(() => {
+    void (async () => {
+      await refresh();
+      await new Promise((r) => setTimeout(r, 150));
+      await refresh();
       window.history.replaceState({}, '', window.location.pathname);
-    });
+    })();
   }, [refresh]);
-
-  useEffect(() => {
-    if (status?.connected !== true) return;
-    try {
-      localStorage.setItem(GMAIL_ONBOARDED_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-    setGmailOnboarded(true);
-  }, [status?.connected]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -168,6 +145,8 @@ export default function App() {
       await fetch('/api/disconnect', { method: 'POST', credentials: 'include' });
       setSettingsOpen(false);
       await refresh();
+      await new Promise((r) => setTimeout(r, 150));
+      await refresh();
     } catch {
       /* ignore */
     } finally {
@@ -175,11 +154,26 @@ export default function App() {
     }
   }
 
+  async function triggerManualScan() {
+    if (scanStarting || scanning) return;
+    setScanStarting(true);
+    try {
+      const r = await fetch('/api/scan', { method: 'POST', credentials: 'include' });
+      if (r.status === 409) return;
+      await refresh();
+      await new Promise((res) => setTimeout(res, 150));
+      await refresh();
+    } catch {
+      /* ignore */
+    } finally {
+      setScanStarting(false);
+    }
+  }
+
   const authenticated = status?.authenticated === true;
   const connected = authenticated && status?.connected;
-  const showHeaderConnect =
-    !gmailOnboarded && (!authenticated || !connected);
   const scanning = status?.scanning;
+  const initialIngestionComplete = status?.initialIngestionComplete === true;
   const progress = status?.ingestionProgress;
   const showProgressBanner =
     connected && progress && (progress.phase === 'listing' || progress.phase === 'triage');
@@ -192,11 +186,20 @@ export default function App() {
           <p className="header-meta">{headerMetaLine}</p>
         </div>
         <div className="header-actions">
-          {showHeaderConnect ? (
-            <a className="header-connect-gmail" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
+          {connected ? (
+            <button
+              type="button"
+              className="header-primary-cta"
+              disabled={disconnecting || scanning || scanStarting}
+              onClick={() => void triggerManualScan()}
+            >
+              {scanning || scanStarting ? 'Scanning…' : 'Scan inbox'}
+            </button>
+          ) : (
+            <a className="header-primary-cta" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
               Connect Gmail
             </a>
-          ) : null}
+          )}
           <div className="settings-wrap" ref={settingsWrapRef}>
             <button
               type="button"
@@ -210,11 +213,6 @@ export default function App() {
               <div className="settings-panel" role="dialog" aria-label="Settings">
                 {status?.email ? (
                   <p className="settings-email">{status.email}</p>
-                ) : null}
-                {!showHeaderConnect ? (
-                  <a className="settings-action" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
-                    {connected ? 'Reconnect Gmail' : 'Connect Gmail'}
-                  </a>
                 ) : null}
                 {connected ? (
                   <button
@@ -314,14 +312,12 @@ export default function App() {
         {items.length === 0 ? (
           <div className="empty">
             {!authenticated
-              ? showHeaderConnect
-                ? 'Connect Gmail above to sign in.'
-                : 'Open Settings to connect Gmail.'
+              ? 'Use Connect Gmail in the top right to sign in.'
               : connected
-                ? 'No open items for this view. Try another category or urgency, or expand the list below.'
-                : showHeaderConnect
-                  ? 'Connect Gmail above to link your inbox.'
-                  : 'Open Settings to connect Gmail.'}
+                ? !initialIngestionComplete
+                  ? 'Use Scan inbox in the top right to load your messages.'
+                  : 'No open items for this view. Try another category or urgency, or expand the list below.'
+                : 'Use Connect Gmail in the top right to link your inbox.'}
           </div>
         ) : (
           items.map((item) => {

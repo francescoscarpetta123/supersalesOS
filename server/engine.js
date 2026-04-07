@@ -15,7 +15,6 @@ import { loadTokens, saveTokens, clearTokens, listAccountIds } from './tokens.js
 import { saveProfile } from './profile.js';
 import { resolvePublicUrl } from './publicUrl.js';
 
-const POLL_MS = 30 * 60 * 1000;
 const TRIAGE_CHUNK = 12;
 
 function profileFromIdToken(idToken) {
@@ -113,7 +112,6 @@ export async function ensureGmailClient(userId) {
   return gmailForTokens(client, next);
 }
 
-const pollers = new Map();
 const userRuntime = new Map();
 
 function rt(userId) {
@@ -139,25 +137,10 @@ export function getRuntimeSnapshot(userId) {
   return rt(userId);
 }
 
+/** No-op retained for disconnect/logout call sites (background polling disabled). */
 export function stopPoller(userId) {
-  const t = pollers.get(userId);
-  if (t) clearInterval(t);
-  pollers.delete(userId);
-  const r = rt(userId);
-  r.nextScanAt = null;
-}
-
-function scheduleNextScan(userId) {
-  rt(userId).nextScanAt = Date.now() + POLL_MS;
-}
-
-export function startPoller(userId) {
-  stopPoller(userId);
-  scheduleNextScan(userId);
-  const t = setInterval(() => {
-    if (loadTokens(userId)) runIncrementalPoll(userId);
-  }, POLL_MS);
-  pollers.set(userId, t);
+  if (!userId) return;
+  rt(userId).nextScanAt = null;
 }
 
 async function processNewMessageIds(userId, gmail, ids, label) {
@@ -255,7 +238,6 @@ export async function runInitialIngestion(userId) {
       lastPollAt: new Date().toISOString(),
       lastError: null,
     });
-    scheduleNextScan(userId);
   } catch (e) {
     r.lastScanError = e.message || String(e);
     setIngestionFields(userId, { lastError: r.lastScanError });
@@ -305,26 +287,19 @@ export async function runIncrementalPoll(userId) {
     setIngestionFields(userId, { lastError: r.lastScanError });
   } finally {
     r.scanning = false;
-    scheduleNextScan(userId);
   }
 }
 
-export async function kickStartAfterConnect(userId) {
+/** Run initial ingestion or an incremental poll, depending on store state. Manual-only; no scheduling. */
+export async function triggerManualEmailProcessing(userId) {
+  if (!loadTokens(userId)) return;
   const store = loadStore(userId);
-  scheduleNextScan(userId);
-  startPoller(userId);
   if (!store.ingestion.initialComplete) await runInitialIngestion(userId);
   else await runIncrementalPoll(userId);
 }
 
 export function bootFromSavedTokens() {
-  for (const userId of listAccountIds()) {
-    if (!loadTokens(userId)) continue;
-    const store = loadStore(userId);
-    startPoller(userId);
-    if (!store.ingestion.initialComplete) runInitialIngestion(userId).catch(() => {});
-    else runIncrementalPoll(userId).catch(() => {});
-  }
+  /* Email processing is manual-only (POST /api/scan). */
 }
 
 export function disconnectAccount(userId) {
