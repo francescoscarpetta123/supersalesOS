@@ -81,6 +81,18 @@ button.header-primary-cta {
   cursor: not-allowed;
 }
 
+.header-primary-cta--connect {
+  color: var(--cat-customers-text);
+  background: var(--cat-customers-bg);
+  border-color: #a7f3d0;
+}
+
+.header-primary-cta--connect:hover {
+  color: var(--cat-customers-text);
+  background: #bbf7d0;
+  border-color: #6ee7b7;
+}
+
 .settings-wrap {
   position: relative;
   flex-shrink: 0;

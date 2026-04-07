@@ -107,6 +107,12 @@ export default function App() {
   }, [refresh]);
 
   useEffect(() => {
+    const gmailConnected =
+      status?.authenticated === true && status?.connected === true;
+    if (!gmailConnected) setSettingsOpen(false);
+  }, [status?.authenticated, status?.connected]);
+
+  useEffect(() => {
     if (!settingsOpen) return;
     function onDocMouseDown(e) {
       if (settingsWrapRef.current && !settingsWrapRef.current.contains(e.target)) {
@@ -196,25 +202,29 @@ export default function App() {
               {scanning || scanStarting ? 'Scanning…' : 'Scan inbox'}
             </button>
           ) : (
-            <a className="header-primary-cta" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
+            <a
+              className="header-primary-cta header-primary-cta--connect"
+              href={`${API_ORIGIN}/auth/google`}
+              rel="noreferrer"
+            >
               Connect Gmail
             </a>
           )}
-          <div className="settings-wrap" ref={settingsWrapRef}>
-            <button
-              type="button"
-              className="settings-link"
-              aria-expanded={settingsOpen}
-              onClick={() => setSettingsOpen((o) => !o)}
-            >
-              Settings
-            </button>
-            {settingsOpen ? (
-              <div className="settings-panel" role="dialog" aria-label="Settings">
-                {status?.email ? (
-                  <p className="settings-email">{status.email}</p>
-                ) : null}
-                {connected ? (
+          {connected ? (
+            <div className="settings-wrap" ref={settingsWrapRef}>
+              <button
+                type="button"
+                className="settings-link"
+                aria-expanded={settingsOpen}
+                onClick={() => setSettingsOpen((o) => !o)}
+              >
+                Settings
+              </button>
+              {settingsOpen ? (
+                <div className="settings-panel" role="dialog" aria-label="Settings">
+                  {status?.email ? (
+                    <p className="settings-email">{status.email}</p>
+                  ) : null}
                   <button
                     type="button"
                     className="settings-action danger"
@@ -223,10 +233,10 @@ export default function App() {
                   >
                     {disconnecting ? 'Disconnecting…' : 'Disconnect Gmail'}
                   </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
