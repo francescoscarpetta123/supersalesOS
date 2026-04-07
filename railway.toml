@@ -1,9 +1,0 @@
-[build]
-# Drop any stale workspace installs / Vite caches before npm ci to avoid EBUSY on lock/cache dirs.
-buildCommand = "rm -rf node_modules client/node_modules server/node_modules client/.vite 2>/dev/null; npm ci && npm run build"
-
-[deploy]
-startCommand = "npm run serve"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 60
-restartPolicyType = "ON_FAILURE"

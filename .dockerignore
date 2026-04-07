@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+client/node_modules
+server/node_modules
+client/dist
+client/.vite
+.data
+.env
+.env.*
+*.log
+.DS_Store
+README.md
