@@ -1,0 +1,8 @@
+[build]
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npm run serve"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"

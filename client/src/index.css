@@ -1,0 +1,50 @@
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --border: #e8e7e3;
+  --text: #1a1a1a;
+  --muted: #6b7280;
+  --link: #1d4ed8;
+  --urgent-critical: #ef4444;
+  --urgent-high: #f59e0b;
+  --urgent-medium: #3b82f6;
+  --urgent-low: #9ca3af;
+  --cat-customers-bg: #d1fae5;
+  --cat-customers-text: #065f46;
+  --cat-finance-bg: #dbeafe;
+  --cat-finance-text: #1e40af;
+  --cat-legal-bg: #ede9fe;
+  --cat-legal-text: #5b21b6;
+  --cat-operations-bg: #fef3c7;
+  --cat-operations-text: #92400e;
+  --cat-other-bg: #f3f4f6;
+  --cat-other-text: #374151;
+  --chip-inactive-bg: #f9f9f8;
+  --chip-inactive-border: #e8e7e3;
+  --chip-inactive-text: #6b7280;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
