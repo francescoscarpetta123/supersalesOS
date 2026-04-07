@@ -1,5 +1,9 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function forwardBrowserHost() {
   return (proxyReq, req) => {
@@ -12,6 +16,8 @@ function forwardBrowserHost() {
 }
 
 export default defineConfig({
+  // Keep Vite’s cache outside node_modules so npm ci / workspace installs never fight rmdir on .../node_modules/.vite (EBUSY on Railway/Linux).
+  cacheDir: path.resolve(__dirname, '.vite'),
   plugins: [react()],
   server: {
     port: 5173,

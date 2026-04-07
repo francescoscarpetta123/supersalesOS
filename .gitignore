@@ -1,4 +1,9 @@
-node_modules/
+# Workspace installs (root + packages)
+**/node_modules/
+
+# Vite cache (cacheDir under client/; must not live under node_modules for clean npm ci)
+**/.vite/
+
 dist/
 .env
 .data/
