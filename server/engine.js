@@ -37,8 +37,7 @@ function profileFromIdToken(idToken) {
 }
 
 function getRedirectUri() {
-  const base = resolvePublicUrl(Number(process.env.PORT) || 3001);
-  return `${base}/auth/google/callback`;
+  return `${resolvePublicUrl()}/auth/google/callback`;
 }
 
 function oauth2Client() {

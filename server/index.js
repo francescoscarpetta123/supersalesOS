@@ -20,7 +20,7 @@ import {
   stopPoller,
   kickStartAfterConnect,
 } from './engine.js';
-import { resolvePublicUrl } from './publicUrl.js';
+import { resolvePublicUrl, listenPortEnv } from './publicUrl.js';
 
 const require = createRequire(import.meta.url);
 const fileStoreFactory = require('session-file-store');
@@ -30,9 +30,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3001;
+const PORT = listenPortEnv();
 const HOST = process.env.HOST || '0.0.0.0';
-const servesDashboard = fs.existsSync(path.join(CLIENT_DIST, 'index.html'));
+const indexHtml = path.join(CLIENT_DIST, 'index.html');
+const servesDashboard = fs.existsSync(indexHtml);
 
 app.set('trust proxy', 1);
 
@@ -309,11 +310,12 @@ app.post('/api/logout', requireSessionUser, (req, res) => {
   });
 });
 
+// Production dashboard: static assets from client/dist, SPA fallback for client-side routing.
 if (servesDashboard) {
   app.use(express.static(CLIENT_DIST, { index: false }));
   app.get(/^\/(?!api\/|auth\/).*/, (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    res.sendFile(path.join(CLIENT_DIST, 'index.html'));
+    res.sendFile(indexHtml, (err) => (err ? next(err) : undefined));
   });
 }
 
