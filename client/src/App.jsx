@@ -16,6 +16,16 @@ const CATEGORIES = [
 
 const fetchOpts = { credentials: 'include' };
 
+const GMAIL_ONBOARDED_KEY = 'ssos_gmail_onboarded';
+
+function readGmailOnboarded() {
+  try {
+    return localStorage.getItem(GMAIL_ONBOARDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function formatTimeAgo(iso) {
   if (!iso) return 'never';
   const t = new Date(iso).getTime();
@@ -58,6 +68,7 @@ export default function App() {
   const [busyId, setBusyId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [gmailOnboarded, setGmailOnboarded] = useState(readGmailOnboarded);
   const oauthReturnHandled = useRef(false);
   const settingsWrapRef = useRef(null);
 
@@ -97,10 +108,26 @@ export default function App() {
     const p = new URLSearchParams(window.location.search);
     if (!p.get('connected') || oauthReturnHandled.current) return;
     oauthReturnHandled.current = true;
+    try {
+      localStorage.setItem(GMAIL_ONBOARDED_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setGmailOnboarded(true);
     void refresh().finally(() => {
       window.history.replaceState({}, '', window.location.pathname);
     });
   }, [refresh]);
+
+  useEffect(() => {
+    if (status?.connected !== true) return;
+    try {
+      localStorage.setItem(GMAIL_ONBOARDED_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setGmailOnboarded(true);
+  }, [status?.connected]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -150,6 +177,8 @@ export default function App() {
 
   const authenticated = status?.authenticated === true;
   const connected = authenticated && status?.connected;
+  const showHeaderConnect =
+    !gmailOnboarded && (!authenticated || !connected);
   const scanning = status?.scanning;
   const progress = status?.ingestionProgress;
   const showProgressBanner =
@@ -162,35 +191,44 @@ export default function App() {
           <h1 className="app-title">Super Sales OS</h1>
           <p className="header-meta">{headerMetaLine}</p>
         </div>
-        <div className="settings-wrap" ref={settingsWrapRef}>
-          <button
-            type="button"
-            className="settings-link"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((o) => !o)}
-          >
-            Settings
-          </button>
-          {settingsOpen ? (
-            <div className="settings-panel" role="dialog" aria-label="Settings">
-              {status?.email ? (
-                <p className="settings-email">{status.email}</p>
-              ) : null}
-              <a className="settings-action" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
-                {connected ? 'Reconnect Gmail' : 'Connect Gmail'}
-              </a>
-              {connected ? (
-                <button
-                  type="button"
-                  className="settings-action danger"
-                  disabled={disconnecting}
-                  onClick={() => void handleDisconnect()}
-                >
-                  {disconnecting ? 'Disconnecting…' : 'Disconnect Gmail'}
-                </button>
-              ) : null}
-            </div>
+        <div className="header-actions">
+          {showHeaderConnect ? (
+            <a className="header-connect-gmail" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
+              Connect Gmail
+            </a>
           ) : null}
+          <div className="settings-wrap" ref={settingsWrapRef}>
+            <button
+              type="button"
+              className="settings-link"
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((o) => !o)}
+            >
+              Settings
+            </button>
+            {settingsOpen ? (
+              <div className="settings-panel" role="dialog" aria-label="Settings">
+                {status?.email ? (
+                  <p className="settings-email">{status.email}</p>
+                ) : null}
+                {!showHeaderConnect ? (
+                  <a className="settings-action" href={`${API_ORIGIN}/auth/google`} rel="noreferrer">
+                    {connected ? 'Reconnect Gmail' : 'Connect Gmail'}
+                  </a>
+                ) : null}
+                {connected ? (
+                  <button
+                    type="button"
+                    className="settings-action danger"
+                    disabled={disconnecting}
+                    onClick={() => void handleDisconnect()}
+                  >
+                    {disconnecting ? 'Disconnecting…' : 'Disconnect Gmail'}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -276,10 +314,14 @@ export default function App() {
         {items.length === 0 ? (
           <div className="empty">
             {!authenticated
-              ? 'Open Settings to connect Gmail.'
+              ? showHeaderConnect
+                ? 'Connect Gmail above to sign in.'
+                : 'Open Settings to connect Gmail.'
               : connected
                 ? 'No open items for this view. Try another category or urgency, or expand the list below.'
-                : 'Open Settings to connect Gmail.'}
+                : showHeaderConnect
+                  ? 'Connect Gmail above to link your inbox.'
+                  : 'Open Settings to connect Gmail.'}
           </div>
         ) : (
           items.map((item) => {
