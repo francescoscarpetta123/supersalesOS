@@ -1,8 +1,13 @@
-# Workspace installs (root + packages)
+# Dependencies — must never be committed (Railway runs npm ci; tracked trees cause EBUSY on .vite, etc.)
+node_modules/
+client/node_modules/
+server/node_modules/
 **/node_modules/
 
-# Vite cache (cacheDir under client/; must not live under node_modules for clean npm ci)
+# Vite cache (configured under client/.vite and the old default client/node_modules/.vite)
 **/.vite/
+client/.vite/
+client/node_modules/.vite/
 
 dist/
 .env
