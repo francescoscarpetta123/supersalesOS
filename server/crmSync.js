@@ -121,10 +121,22 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
   const results = [];
   for (const t of threads) {
     const row = infByThread[t.threadId];
+    if (row?.accountKind === 'vendor_service') continue;
+
+    const latestSummary = pickLatestSummary(
+      summaries.filter((s) => String(s.threadId) === t.threadId)
+    );
     const contacted = maxInternalMs(
       summaries.filter((s) => String(s.threadId) === t.threadId)
     );
     const lastMs = contacted > 0 ? contacted : Date.now();
+
+    const fallbackActivity = [latestSummary?.subject, latestSummary?.snippet]
+      .filter(Boolean)
+      .join(' — ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 220);
 
     const fromPrimary = displayNameFromFromHeader(t.hints.fromLines?.[0] || '') || '';
     const inferredPrimary = row?.primaryContact;
@@ -142,9 +154,12 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
 
     const other = row?.otherContacts?.length ? row.otherContacts : [];
 
+    const lastActivitySummary = (row?.lastActivitySummary || fallbackActivity || '').trim().slice(0, 280);
+
     results.push({
       id: randomUUID(),
       canonicalKey: t.canonicalKey,
+      accountKind: row?.accountKind ?? 'customer_prospect',
       companyName: row?.companyName || t.hints.fallbackName,
       primaryContact: {
         name: String(primary.name ?? ''),
@@ -156,6 +171,7 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
       documentsSigned: row?.documentsSigned ?? defaultDocs(),
       nextStep: row?.nextStep ?? '',
       nextStepDue: row?.nextStepDue ?? null,
+      lastActivitySummary,
       lastContactedMs: lastMs,
       lastContactedAt: new Date(lastMs).toISOString(),
       threadIds: [t.threadId],

@@ -7,6 +7,10 @@ import {
   defaultDocs,
   CRM_PRODUCT_KEYS,
   CRM_DOC_KEYS,
+  normalizeCrmAccountKind,
+  CRM_VENDOR_DOMAIN_BLOCKLIST,
+  engagementTierFromLastContactMs,
+  CRM_ENGAGEMENT_LABELS,
 } from './crmConstants.js';
 import { domainStemForKey } from './crmDedupe.js';
 
@@ -214,19 +218,38 @@ function normalizeCrmCompanyPatch(patch) {
   return out;
 }
 
+function crmRowExcludedFromUi(r) {
+  if (r.accountKind === 'vendor_service') return true;
+  if (r.accountKind === 'customer_prospect') return false;
+  const k = String(r.canonicalKey || '');
+  if (k.startsWith('d:')) {
+    const dom = k.slice(2).toLowerCase();
+    if (CRM_VENDOR_DOMAIN_BLOCKLIST.has(dom)) return true;
+  }
+  return false;
+}
+
+function enrichCrmCompanyForApi(r) {
+  const withTs =
+    r.lastContactedAt != null || r.lastContactedMs == null || !Number.isFinite(Number(r.lastContactedMs))
+      ? r
+      : {
+          ...r,
+          lastContactedAt: new Date(Number(r.lastContactedMs)).toISOString(),
+        };
+  const engagementTier = engagementTierFromLastContactMs(withTs.lastContactedMs);
+  return {
+    ...withTs,
+    engagementTier,
+    engagementLabel: CRM_ENGAGEMENT_LABELS[engagementTier],
+  };
+}
+
 export function listCrmCompaniesSorted(userId) {
   const store = getStoreSnapshot(userId);
-  const rows = [...(store.crmCompanies ?? [])];
+  const rows = [...(store.crmCompanies ?? [])].filter((r) => !crmRowExcludedFromUi(r));
   rows.sort((a, b) => (b.lastContactedMs ?? 0) - (a.lastContactedMs ?? 0));
-  return rows.map((r) => {
-    if (r.lastContactedAt != null || r.lastContactedMs == null || !Number.isFinite(Number(r.lastContactedMs))) {
-      return r;
-    }
-    return {
-      ...r,
-      lastContactedAt: new Date(Number(r.lastContactedMs)).toISOString(),
-    };
-  });
+  return rows.map(enrichCrmCompanyForApi);
 }
 
 export function patchCrmCompany(userId, companyId, patch) {
@@ -253,13 +276,16 @@ export function patchCrmCompany(userId, companyId, patch) {
   c.inferenceLocked = true;
   c.updatedAt = new Date().toISOString();
   saveStore(userId, store);
-  return { ok: true, company: c };
+  return { ok: true, company: enrichCrmCompanyForApi(c) };
 }
 
 function mergeCrmSnapshotInto(target, incoming) {
   target.lastContactedMs = Math.max(target.lastContactedMs ?? 0, incoming.lastContactedMs ?? 0);
   target.lastContactedAt = new Date(target.lastContactedMs).toISOString();
   target.threadIds = [...new Set([...(target.threadIds ?? []), ...(incoming.threadIds ?? [])])];
+  if (incoming.lastActivitySummary != null && String(incoming.lastActivitySummary).trim()) {
+    target.lastActivitySummary = String(incoming.lastActivitySummary).trim().slice(0, 280);
+  }
   if (!target.inferenceLocked) {
     if (incoming.companyName) target.companyName = incoming.companyName;
     if (incoming.primaryContact?.name || incoming.primaryContact?.title)
@@ -270,6 +296,7 @@ function mergeCrmSnapshotInto(target, incoming) {
     target.documentsSigned = incoming.documentsSigned;
     if (incoming.nextStep !== undefined) target.nextStep = incoming.nextStep;
     if (incoming.nextStepDue !== undefined) target.nextStepDue = incoming.nextStepDue;
+    if (incoming.accountKind != null) target.accountKind = normalizeCrmAccountKind(incoming.accountKind);
   } else {
     const seen = new Set(
       (target.otherContacts ?? []).map((o) => String(o.email || o.name || '').toLowerCase())

@@ -6,6 +6,7 @@ import {
   defaultProducts,
   defaultDocs,
   normalizePipelineStage,
+  normalizeCrmAccountKind,
 } from './crmConstants.js';
 
 const MODEL = 'claude-sonnet-4-20250514';
@@ -61,10 +62,11 @@ export async function inferCrmRowsForThreads(threads, apiKey) {
   if (!threads?.length) return [];
   const client = new Anthropic({ apiKey });
 
-  const userContent = `You are a CRM extraction assistant. For each THREAD below, infer a single company/opportunity row for a B2B healthcare/SaaS sales context.
+  const userContent = `You are a CRM extraction assistant. For each THREAD below, infer a single company/opportunity row for a B2B healthcare/SaaS sales context (e.g. selling software/services TO facilities).
 
 Return ONLY a raw JSON array (no markdown fences). One object per thread, same order as input. Each object MUST include:
 - threadId (string — MUST match input)
+- accountKind (string — exactly one of: customer_prospect, vendor_service)
 - companyName (string — best display name for the company)
 - primaryContact: { name (string), title (string or null) } for the main external person in the thread when known
 - otherContacts: array of { name, title or null, email or null } for additional external people (exclude the primary)
@@ -73,6 +75,15 @@ Return ONLY a raw JSON array (no markdown fences). One object per thread, same o
 - documentsSigned: object with boolean keys: baa, msa, sow (true only if the email clearly states these are signed/executed)
 - nextStep (string — concise next action; may be empty)
 - nextStepDue (string YYYY-MM-DD or null)
+- lastActivitySummary (string — ONE short line, max ~140 chars, describing the most recent email interaction, e.g. subject + what happened; no newlines)
+
+Account classification (critical):
+- customer_prospect: organizations you or the inbox owner are selling to, partnering with as a customer, or engaging as a sales prospect — especially SNFs, skilled nursing, healthcare facilities, health systems, senior care operators, hospitals, medical groups, and similar buyers. Named B2B prospects discussing demos, pricing, pilots, contracts.
+- vendor_service: the sender is selling TO the inbox owner, or it's a tool/service provider the owner pays (billing, hosting, recruiting, events, print, SaaS infra), newsletters, automated system mail, receipts, or transactional notifications.
+Examples that are almost always vendor_service: Stripe, Vercel, Apollo, WeWork, Handshake, ExpoPrint, NIC Events, LinkedIn, Zoom billing, Calendly, generic Google Calendar/Docs automation notifications (not a human buyer thread).
+Examples that are customer_prospect: SNFs, care operators, facility leadership, clinical/admin buyers discussing your product.
+
+If the thread is clearly vendor_service, still fill other fields for completeness — downstream systems will filter these out.
 
 Pipeline guidance:
 - lead: early interest, intro, no demo scheduled yet
@@ -110,8 +121,13 @@ ${JSON.stringify(
   for (const t of threads) {
     const r = byThread[t.threadId];
     if (!r) continue;
+    const summaryRaw =
+      r.lastActivitySummary != null && String(r.lastActivitySummary).trim()
+        ? String(r.lastActivitySummary).trim()
+        : '';
     out.push({
       threadId: t.threadId,
+      accountKind: normalizeCrmAccountKind(r.accountKind),
       companyName: String(r.companyName ?? t.hints?.fallbackName ?? '').trim() || t.hints?.fallbackName || 'Unknown',
       primaryContact: {
         name: String(r.primaryContact?.name ?? '').trim(),
@@ -133,6 +149,7 @@ ${JSON.stringify(
       nextStep: r.nextStep == null ? '' : String(r.nextStep),
       nextStepDue:
         r.nextStepDue == null || r.nextStepDue === '' ? null : String(r.nextStepDue).slice(0, 10),
+      lastActivitySummary: summaryRaw.slice(0, 280),
     });
   }
   return out;

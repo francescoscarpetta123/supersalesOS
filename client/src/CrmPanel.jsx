@@ -12,20 +12,6 @@ const PIPELINE_OPTIONS = [
   { id: 'closed_lost', label: 'Closed Lost' },
 ];
 
-const PRODUCT_OPTIONS = [
-  { key: 'adrs', label: 'ADRs' },
-  { key: 'tripleCheck', label: 'Triple Check' },
-  { key: 'pdpm', label: 'PDPM' },
-  { key: 'workflow', label: 'Workflow' },
-  { key: 'superGpt', label: 'SuperGPT' },
-];
-
-const DOC_OPTIONS = [
-  { key: 'baa', label: 'BAA' },
-  { key: 'msa', label: 'MSA' },
-  { key: 'sow', label: 'SOW' },
-];
-
 function formatLastContacted(iso) {
   if (!iso) return '—';
   const t = new Date(iso).getTime();
@@ -50,6 +36,15 @@ function useDebouncedCallback(fn, delay) {
       tRef.current = setTimeout(() => fnRef.current(...args), delay);
     },
     [delay]
+  );
+}
+
+function EngagementPill({ tier, label }) {
+  const t = tier || 'cold';
+  return (
+    <span className={`crm-pill crm-pill--${t}`} title={`Engagement: ${label ?? t}`}>
+      {label ?? t}
+    </span>
   );
 }
 
@@ -103,6 +98,8 @@ function ContactCell({ company, onPatch }) {
   );
 }
 
+const COL_COUNT = 9;
+
 function CompanyRow({ company, onPatch }) {
   const [expanded, setExpanded] = useState(false);
   const [companyName, setCompanyName] = useState(company.companyName ?? '');
@@ -136,15 +133,14 @@ function CompanyRow({ company, onPatch }) {
 
   const scheduleMeta = useDebouncedCallback(saveMeta, 450);
 
-  const products = { ...(company.productsInterested || {}) };
-  const docs = { ...(company.documentsSigned || {}) };
+  const activityText = (company.lastActivitySummary || '').trim() || '—';
 
   return (
     <>
       <tr className="crm-row">
-        <td>
+        <td className="crm-td-company">
           <input
-            className="crm-input"
+            className="crm-input crm-input--company"
             type="text"
             value={companyName}
             onChange={(e) => {
@@ -158,7 +154,7 @@ function CompanyRow({ company, onPatch }) {
         <td>
           <ContactCell company={company} onPatch={patch} />
         </td>
-        <td>
+        <td className="crm-td-other">
           {(company.otherContacts ?? []).length > 0 ? (
             <button
               type="button"
@@ -172,7 +168,10 @@ function CompanyRow({ company, onPatch }) {
             <span className="crm-no-others">—</span>
           )}
         </td>
-        <td>
+        <td className="crm-td-status">
+          <EngagementPill tier={company.engagementTier} label={company.engagementLabel} />
+        </td>
+        <td className="crm-td-stage">
           <select
             className="crm-select"
             value={pipelineStage}
@@ -190,44 +189,15 @@ function CompanyRow({ company, onPatch }) {
             ))}
           </select>
         </td>
-        <td className="crm-td-checks">
-          <div className="crm-check-grid">
-            {PRODUCT_OPTIONS.map((p) => (
-              <label key={p.key} className="crm-check">
-                <input
-                  type="checkbox"
-                  checked={Boolean(products[p.key])}
-                  onChange={(e) => {
-                    const next = { ...products, [p.key]: e.target.checked };
-                    patch({ productsInterested: next });
-                  }}
-                />
-                <span>{p.label}</span>
-              </label>
-            ))}
-          </div>
+        <td className="crm-td-activity">
+          <p className="crm-activity-line" title={activityText === '—' ? undefined : activityText}>
+            {activityText}
+          </p>
         </td>
-        <td className="crm-td-checks">
-          <div className="crm-check-grid crm-check-grid--docs">
-            {DOC_OPTIONS.map((d) => (
-              <label key={d.key} className="crm-check">
-                <input
-                  type="checkbox"
-                  checked={Boolean(docs[d.key])}
-                  onChange={(e) => {
-                    const next = { ...docs, [d.key]: e.target.checked };
-                    patch({ documentsSigned: next });
-                  }}
-                />
-                <span>{d.label}</span>
-              </label>
-            ))}
-          </div>
-        </td>
-        <td>
+        <td className="crm-td-next">
           <textarea
             className="crm-textarea"
-            rows={2}
+            rows={3}
             value={nextStep}
             onChange={(e) => {
               setNextStep(e.target.value);
@@ -237,7 +207,7 @@ function CompanyRow({ company, onPatch }) {
             placeholder="Next step"
           />
         </td>
-        <td>
+        <td className="crm-td-due">
           <input
             className="crm-input"
             type="date"
@@ -250,11 +220,11 @@ function CompanyRow({ company, onPatch }) {
             aria-label="Next step due"
           />
         </td>
-        <td className="crm-last">{formatLastContacted(company.lastContactedAt)}</td>
+        <td className="crm-td-last">{formatLastContacted(company.lastContactedAt)}</td>
       </tr>
       {expanded && (company.otherContacts ?? []).length > 0 ? (
         <tr className="crm-row crm-row--sub">
-          <td colSpan={9}>
+          <td colSpan={COL_COUNT}>
             <div className="crm-others">
               <span className="crm-others-label">Other contacts</span>
               <ul className="crm-others-list">
@@ -349,7 +319,8 @@ export default function CrmPanel({ active, authenticated, connected, initialInge
   if (!companies.length) {
     return (
       <div className="crm-empty card-like">
-        No companies yet. Scan your inbox — we will add accounts from recent threads.
+        No prospect or customer companies match this view yet. Scan your inbox — we filter out vendors and
+        tools automatically.
       </div>
     );
   }
@@ -364,9 +335,9 @@ export default function CrmPanel({ active, authenticated, connected, initialInge
                 <th>Company</th>
                 <th>Primary contact</th>
                 <th>Other</th>
+                <th>Status</th>
                 <th>Stage</th>
-                <th>Products</th>
-                <th>Docs</th>
+                <th>Last activity</th>
                 <th>Next step</th>
                 <th>Due</th>
                 <th>Last contacted</th>
