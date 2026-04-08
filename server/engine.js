@@ -6,6 +6,7 @@ import {
   authUrl,
   listRecentThreadIds,
   collectMessageIdsFromThreads,
+  getMessageSummaries,
   getProfileHistoryId,
 } from './gmail.js';
 import { triageEmailBatch } from './triage.js';
