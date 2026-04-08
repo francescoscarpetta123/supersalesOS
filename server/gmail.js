@@ -59,6 +59,42 @@ export async function listMessagesInWindow(gmail, query, onPageIds) {
   } while (pageToken);
 }
 
+/** Most recent thread ids for `query` (newest first), capped at `maxThreads`. */
+export async function listRecentThreadIds(gmail, query, maxThreads) {
+  const n = Math.min(500, Math.max(1, maxThreads));
+  const res = await gmail.users.threads.list({
+    userId: 'me',
+    q: query,
+    maxResults: n,
+  });
+  const threads = res.data.threads ?? [];
+  return threads.slice(0, maxThreads).map((t) => t.id).filter(Boolean);
+}
+
+/** All message ids belonging to the given threads (deduped). */
+export async function collectMessageIdsFromThreads(gmail, threadIds, concurrency = 6) {
+  const out = [];
+  for (let i = 0; i < threadIds.length; i += concurrency) {
+    const batch = threadIds.slice(i, i + concurrency);
+    const parts = await Promise.all(
+      batch.map(async (tid) => {
+        try {
+          const res = await gmail.users.threads.get({
+            userId: 'me',
+            id: tid,
+            format: 'metadata',
+          });
+          return (res.data.messages ?? []).map((m) => m.id).filter(Boolean);
+        } catch {
+          return [];
+        }
+      })
+    );
+    for (const arr of parts) out.push(...arr);
+  }
+  return [...new Set(out)];
+}
+
 function decodeBase64Url(data) {
   if (!data || typeof data !== 'string') return '';
   try {

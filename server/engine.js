@@ -4,10 +4,9 @@ import {
   gmailForTokens,
   refreshIfNeeded,
   authUrl,
-  listMessagesInWindow,
-  getMessageSummaries,
+  listRecentThreadIds,
+  collectMessageIdsFromThreads,
   getProfileHistoryId,
-  listHistoryMessageIds,
 } from './gmail.js';
 import { triageEmailBatch } from './triage.js';
 import { loadStore, addActionItems, bumpScanned, setIngestionFields } from './store.js';
@@ -16,6 +15,15 @@ import { saveProfile, loadProfile } from './profile.js';
 import { syncCrmFromIngestionChunk } from './crmSync.js';
 
 const TRIAGE_CHUNK = 12;
+
+/** Manual scans only consider the N most recent threads (faster; full convos in CRM/triage still per-message). */
+const SCAN_MAX_THREADS = 20;
+const SCAN_QUERY = 'newer_than:30d';
+
+async function messageIdsFromRecentThreads(gmail) {
+  const threadIds = await listRecentThreadIds(gmail, SCAN_QUERY, SCAN_MAX_THREADS);
+  return collectMessageIdsFromThreads(gmail, threadIds);
+}
 
 function profileFromIdToken(idToken) {
   if (!idToken || typeof idToken !== 'string') return null;
@@ -223,19 +231,8 @@ export async function runInitialIngestion(userId) {
   setProgress(userId, { phase: 'listing', total: 0, processed: 0, percent: 0 });
 
   try {
-    const allIds = [];
-    await listMessagesInWindow(gmail, 'newer_than:30d', async (pageIds) => {
-      const storeNow = loadStore(userId);
-      const fresh = pageIds.filter((id) => !storeNow.processedMessageIds.includes(id));
-      allIds.push(...fresh);
-      setProgress(userId, {
-        phase: 'listing',
-        total: allIds.length,
-        processed: 0,
-        percent: 0,
-      });
-    });
-
+    setProgress(userId, { phase: 'listing', total: 0, processed: 0, percent: 0 });
+    const allIds = await messageIdsFromRecentThreads(gmail);
     const unique = [...new Set(allIds)];
     setProgress(userId, {
       phase: 'triage',
@@ -273,23 +270,8 @@ export async function runIncrementalPoll(userId) {
   r.scanning = true;
   r.lastScanError = null;
   try {
-    let start = store.ingestion.historyId;
-    if (!start) {
-      start = await getProfileHistoryId(gmail);
-      setIngestionFields(userId, { historyId: String(start) });
-    }
-
-    const hist = await listHistoryMessageIds(gmail, start);
-    let newIds = hist.addedIds;
-
-    if (!hist.ok) {
-      await listMessagesInWindow(gmail, 'newer_than:30d', async (pageIds) => {
-        newIds.push(...pageIds);
-      });
-      newIds = [...new Set(newIds)];
-    }
-
-    await processNewMessageIds(userId, gmail, newIds, 'incremental');
+    const newIds = await messageIdsFromRecentThreads(gmail);
+    await processNewMessageIds(userId, gmail, [...new Set(newIds)], 'incremental');
 
     const nextHist = await getProfileHistoryId(gmail);
     setIngestionFields(userId, {
