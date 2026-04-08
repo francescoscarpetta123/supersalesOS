@@ -4,7 +4,7 @@ import {
   gmailForTokens,
   refreshIfNeeded,
   authUrl,
-  listRecentThreadIds,
+  listAllThreadIdsForQuery,
   collectMessageIdsFromThreads,
   getMessageSummaries,
   getProfileHistoryId,
@@ -17,12 +17,18 @@ import { syncCrmFromIngestionChunk } from './crmSync.js';
 
 const TRIAGE_CHUNK = 12;
 
-/** Manual scans only consider the N most recent threads (faster; full convos in CRM/triage still per-message). */
-const SCAN_MAX_THREADS = 20;
-const SCAN_QUERY = 'newer_than:30d';
+/** All threads in this Gmail search window (date filter only; no fixed thread cap). */
+const SCAN_QUERY = 'newer_than:7d';
 
-async function messageIdsFromRecentThreads(gmail) {
-  const threadIds = await listRecentThreadIds(gmail, SCAN_QUERY, SCAN_MAX_THREADS);
+async function messageIdsFromScanWindow(gmail, userId) {
+  const threadIds = await listAllThreadIdsForQuery(gmail, SCAN_QUERY, ({ totalSoFar }) => {
+    setProgress(userId, {
+      phase: 'listing',
+      total: totalSoFar,
+      processed: 0,
+      percent: 0,
+    });
+  });
   return collectMessageIdsFromThreads(gmail, threadIds);
 }
 
@@ -233,7 +239,7 @@ export async function runInitialIngestion(userId) {
 
   try {
     setProgress(userId, { phase: 'listing', total: 0, processed: 0, percent: 0 });
-    const allIds = await messageIdsFromRecentThreads(gmail);
+    const allIds = await messageIdsFromScanWindow(gmail, userId);
     const unique = [...new Set(allIds)];
     setProgress(userId, {
       phase: 'triage',
@@ -271,7 +277,7 @@ export async function runIncrementalPoll(userId) {
   r.scanning = true;
   r.lastScanError = null;
   try {
-    const newIds = await messageIdsFromRecentThreads(gmail);
+    const newIds = await messageIdsFromScanWindow(gmail, userId);
     await processNewMessageIds(userId, gmail, [...new Set(newIds)], 'incremental');
 
     const nextHist = await getProfileHistoryId(gmail);

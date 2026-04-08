@@ -572,6 +572,33 @@ button.header-primary-cta {
   width: 100%;
 }
 
+.crm-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.crm-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.crm-export-btn:hover {
+  background: #fafaf9;
+  border-color: #d6d5d0;
+}
+
 .crm-table-card {
   background: var(--surface);
   border: 1px solid var(--border);

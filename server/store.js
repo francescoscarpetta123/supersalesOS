@@ -182,6 +182,12 @@ function normalizeCrmCompanyPatch(patch) {
           ? null
           : String(patch.primaryContact.title),
     };
+    if (patch.primaryContact.email !== undefined) {
+      out.primaryContact.email =
+        patch.primaryContact.email === '' || patch.primaryContact.email == null
+          ? null
+          : String(patch.primaryContact.email).toLowerCase();
+    }
   }
   if (patch.otherContacts != null) {
     out.otherContacts = Array.isArray(patch.otherContacts)
@@ -264,6 +270,12 @@ export function patchCrmCompany(userId, companyId, patch) {
             ? null
             : String(patch.primaryContact.title)
           : c.primaryContact?.title ?? null,
+      email:
+        patch.primaryContact.email !== undefined
+          ? patch.primaryContact.email === '' || patch.primaryContact.email == null
+            ? null
+            : String(patch.primaryContact.email).toLowerCase()
+          : c.primaryContact?.email ?? null,
     };
   }
   Object.assign(c, norm);
@@ -282,8 +294,33 @@ function mergeCrmSnapshotInto(target, incoming) {
   }
   if (!target.inferenceLocked) {
     if (incoming.companyName) target.companyName = incoming.companyName;
-    if (incoming.primaryContact?.name || incoming.primaryContact?.title)
-      target.primaryContact = incoming.primaryContact;
+    if (
+      incoming.primaryContact &&
+      (incoming.primaryContact.name ||
+        incoming.primaryContact.title ||
+        incoming.primaryContact.email !== undefined)
+    ) {
+      const p = incoming.primaryContact;
+      const prev = target.primaryContact ?? {};
+      target.primaryContact = {
+        name:
+          p.name != null && String(p.name).trim()
+            ? String(p.name)
+            : String(prev.name ?? ''),
+        title:
+          p.title !== undefined
+            ? p.title === '' || p.title == null
+              ? null
+              : String(p.title)
+            : prev.title ?? null,
+        email:
+          p.email !== undefined
+            ? p.email === '' || p.email == null
+              ? null
+              : String(p.email).toLowerCase()
+            : prev.email ?? null,
+      };
+    }
     if (incoming.otherContacts?.length) target.otherContacts = incoming.otherContacts;
     target.pipelineStage = incoming.pipelineStage;
     target.productsInterested = incoming.productsInterested;

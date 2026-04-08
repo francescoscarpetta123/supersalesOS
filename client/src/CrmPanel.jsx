@@ -2,6 +2,33 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const fetchOpts = { credentials: 'include' };
 
+function exportCrmCsv() {
+  const date = new Date();
+  const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const fallbackName = `supersalesos-crm-${ymd}.csv`;
+  void (async () => {
+    try {
+      const r = await fetch('/api/crm/export.csv', { credentials: 'include' });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const cd = r.headers.get('Content-Disposition');
+      const m = cd && cd.match(/filename="([^"]+)"/);
+      const filename = m ? m[1] : fallbackName;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noreferrer';
+      document.body.append(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  })();
+}
+
 const PIPELINE_OPTIONS = [
   { id: 'lead', label: 'Lead' },
   { id: 'demo_scheduled', label: 'Demo Scheduled' },
@@ -251,38 +278,41 @@ export default function CrmPanel({ active, authenticated, connected, initialInge
   if (loading) {
     return <div className="crm-empty card-like">Loading CRM…</div>;
   }
-  if (!companies.length) {
-    return (
-      <div className="crm-empty card-like">
-        No prospect or customer companies match this view yet. Scan your inbox — we filter out vendors and
-        tools automatically.
-      </div>
-    );
-  }
-
   return (
     <div className="crm-wrap">
-      <div className="crm-table-card">
-        <div className="crm-table-scroll">
-          <table className="crm-table">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Primary contact</th>
-                <th>Stage</th>
-                <th>Last activity</th>
-                <th>Next step</th>
-                <th>Last contacted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((c) => (
-                <CompanyRow key={c.id} company={c} onPatch={patchCompany} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="crm-toolbar">
+        <button type="button" className="crm-export-btn" onClick={() => exportCrmCsv()}>
+          Export CSV
+        </button>
       </div>
+      {!companies.length ? (
+        <div className="crm-empty card-like">
+          No prospect or customer companies match this view yet. Scan your inbox — we filter out vendors and
+          tools automatically.
+        </div>
+      ) : (
+        <div className="crm-table-card">
+          <div className="crm-table-scroll">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Primary contact</th>
+                  <th>Stage</th>
+                  <th>Last activity</th>
+                  <th>Next step</th>
+                  <th>Last contacted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {companies.map((c) => (
+                  <CompanyRow key={c.id} company={c} onPatch={patchCompany} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

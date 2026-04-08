@@ -68,7 +68,7 @@ Return ONLY a raw JSON array (no markdown fences). One object per thread, same o
 - threadId (string — MUST match input)
 - accountKind (string — exactly one of: customer_prospect, vendor_service)
 - companyName (string — best display name for the company)
-- primaryContact: { name (string — full name), title (string or null — job title exactly as in signature when present) } Identify the SINGLE external person at this company who matters most for the relationship: NOT simply the author of the first or latest email, but whoever shows the most substantive back-and-forth with the inbox owner (replies, decisions, scheduling, questions). Use the full thread: signatures, quoted replies, and “On … wrote:” chains. Prefer facility/operator buyers and economic buyers over incidental CCs. If unclear, best evidence from signatures and conversation flow.
+- primaryContact: { name (string — full name), title (string or null — job title exactly as in signature when present), email (string lowercased address or null if unknown) } Identify the SINGLE external person at this company who matters most for the relationship: NOT simply the author of the first or latest email, but whoever shows the most substantive back-and-forth with the inbox owner (replies, decisions, scheduling, questions). Use the full thread: signatures, quoted replies, and “On … wrote:” chains. Prefer facility/operator buyers and economic buyers over incidental CCs. If unclear, best evidence from signatures and conversation flow. Include their email when it appears in From, signatures, or headers.
 - otherContacts: array of { name, title or null, email or null } for other notable external people (exclude the primary)
 - pipelineStage (string — exactly one of: ${CRM_PIPELINE_STAGES.join(', ')})
 - productsInterested: object with boolean keys: adrs, tripleCheck, pdpm, workflow, superGpt (use false when unknown)
@@ -135,6 +135,10 @@ ${JSON.stringify(
           r.primaryContact?.title == null || r.primaryContact?.title === ''
             ? null
             : String(r.primaryContact.title),
+        email:
+          r.primaryContact?.email == null || r.primaryContact?.email === ''
+            ? null
+            : String(r.primaryContact.email).toLowerCase().trim(),
       },
       otherContacts: Array.isArray(r.otherContacts)
         ? r.otherContacts.map((c) => ({

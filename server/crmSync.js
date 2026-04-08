@@ -179,6 +179,11 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
     const inferredPrimary = row?.primaryContact;
     const nameFromModel = String(inferredPrimary?.name || '').trim();
     const fromLatest = displayNameFromFromHeader(latestSummary?.from || '') || '';
+    const emailFromModel =
+      inferredPrimary?.email != null && String(inferredPrimary.email).trim()
+        ? String(inferredPrimary.email).toLowerCase().trim()
+        : null;
+    const emailFromLatest = emailAddressFromFromHeader(latestSummary?.from || '') || null;
     const primary = {
       name:
         nameFromModel ||
@@ -189,6 +194,7 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
         inferredPrimary?.title != null && inferredPrimary?.title !== ''
           ? String(inferredPrimary.title)
           : null,
+      email: emailFromModel || emailFromLatest || null,
     };
 
     const other = row?.otherContacts?.length ? row.otherContacts : [];
@@ -205,6 +211,7 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
       primaryContact: {
         name: String(primary.name ?? ''),
         title: primary.title == null || primary.title === '' ? null : String(primary.title),
+        email: primary.email == null || primary.email === '' ? null : String(primary.email).toLowerCase(),
       },
       otherContacts: other,
       pipelineStage: row ? row.pipelineStage : normalizePipelineStage('lead'),

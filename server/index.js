@@ -29,6 +29,7 @@ import {
   getGoogleOAuthRedirectUri,
 } from './engine.js';
 import { listenPortEnv } from './publicUrl.js';
+import { buildCrmCsv, crmExportFilenameDate } from './crmExport.js';
 
 const require = createRequire(import.meta.url);
 const fileStoreFactory = require('session-file-store');
@@ -307,6 +308,17 @@ app.patch('/api/crm/companies/:id', requireSessionUser, (req, res) => {
   const r = patchCrmCompany(userId, id, req.body ?? {});
   if (!r.ok) return res.status(404).json({ error: r.error || 'Not found' });
   res.json({ company: r.company });
+});
+
+app.get('/api/crm/export.csv', requireSessionUser, (req, res) => {
+  const userId = req.session.userId;
+  const rows = listCrmCompaniesSorted(userId);
+  const body = buildCrmCsv(rows);
+  const date = crmExportFilenameDate();
+  const filename = `supersalesos-crm-${date}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(body);
 });
 
 app.patch('/api/action-items/:id', requireSessionUser, (req, res) => {

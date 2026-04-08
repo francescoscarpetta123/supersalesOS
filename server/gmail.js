@@ -71,6 +71,30 @@ export async function listRecentThreadIds(gmail, query, maxThreads) {
   return threads.slice(0, maxThreads).map((t) => t.id).filter(Boolean);
 }
 
+/**
+ * All thread ids matching `query`, paginated (e.g. newer_than:7d).
+ * @param {((info: { pageCount: number; totalSoFar: number }) => void) | null} onPage optional progress
+ */
+export async function listAllThreadIdsForQuery(gmail, query, onPage = null) {
+  const ids = [];
+  let pageToken;
+  let pageCount = 0;
+  do {
+    const res = await gmail.users.threads.list({
+      userId: 'me',
+      q: query,
+      maxResults: 500,
+      pageToken,
+    });
+    const page = (res.data.threads ?? []).map((t) => t.id).filter(Boolean);
+    ids.push(...page);
+    pageCount += 1;
+    if (onPage) onPage({ pageCount, totalSoFar: ids.length });
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return ids;
+}
+
 /** All message ids belonging to the given threads (deduped). */
 export async function collectMessageIdsFromThreads(gmail, threadIds, concurrency = 6) {
   const out = [];
