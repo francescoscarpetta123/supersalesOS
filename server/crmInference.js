@@ -8,6 +8,7 @@ import {
   normalizePipelineStage,
   normalizeCrmAccountKind,
 } from './crmConstants.js';
+import { normalizeLastActivityStored } from './crmActivityFormat.js';
 
 const MODEL = 'claude-sonnet-4-20250514';
 
@@ -75,7 +76,7 @@ Return ONLY a raw JSON array (no markdown fences). One object per thread, same o
 - documentsSigned: object with boolean keys: baa, msa, sow (true only if the email clearly states these are signed/executed)
 - nextStep (string — concise next action; may be empty)
 - nextStepDue (string YYYY-MM-DD or null)
-- lastActivitySummary (string — complete narrative of the most recent meaningful interaction: what was said, who said it, and next implied move. Use multiple sentences and line breaks if helpful; be thorough, not terse)
+- lastActivityBullets (JSON array of 1 or 2 strings only). Each string is ONE key fact, maximum 10 words, plain text with no leading "•" or "-". Examples: "Demo confirmed for Monday afternoon", "Steve offered Teams invite flexibility". If you also output legacy lastActivitySummary, it will be ignored when bullets are present.
 
 Account classification (critical):
 - customer_prospect: organizations you or the inbox owner are selling to, partnering with as a customer, or engaging as a sales prospect — especially SNFs, skilled nursing, healthcare facilities, health systems, senior care operators, hospitals, medical groups, and similar buyers. Named B2B prospects discussing demos, pricing, pilots, contracts.
@@ -121,10 +122,7 @@ ${JSON.stringify(
   for (const t of threads) {
     const r = byThread[t.threadId];
     if (!r) continue;
-    const summaryRaw =
-      r.lastActivitySummary != null && String(r.lastActivitySummary).trim()
-        ? String(r.lastActivitySummary).trim()
-        : '';
+    const activityStored = normalizeLastActivityStored(r).slice(0, 400);
     out.push({
       threadId: t.threadId,
       accountKind: normalizeCrmAccountKind(r.accountKind),
@@ -153,7 +151,7 @@ ${JSON.stringify(
       nextStep: r.nextStep == null ? '' : String(r.nextStep),
       nextStepDue:
         r.nextStepDue == null || r.nextStepDue === '' ? null : String(r.nextStepDue).slice(0, 10),
-      lastActivitySummary: summaryRaw.slice(0, 6000),
+      lastActivitySummary: activityStored,
     });
   }
   return out;

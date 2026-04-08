@@ -11,7 +11,7 @@ import {
   CRM_VENDOR_DOMAIN_BLOCKLIST,
 } from './crmConstants.js';
 
-const CRM_ACTIVITY_SUMMARY_MAX = 6000;
+const CRM_ACTIVITY_SUMMARY_MAX = 500;
 import { domainStemForKey } from './crmDedupe.js';
 
 const defaultStore = () => ({
@@ -248,7 +248,9 @@ function enrichCrmCompanyForApi(r) {
 export function listCrmCompaniesSorted(userId) {
   const store = getStoreSnapshot(userId);
   const rows = [...(store.crmCompanies ?? [])].filter((r) => !crmRowExcludedFromUi(r));
-  rows.sort((a, b) => (b.lastContactedMs ?? 0) - (a.lastContactedMs ?? 0));
+  rows.sort(
+    (a, b) => Number(b.lastContactedMs ?? 0) - Number(a.lastContactedMs ?? 0)
+  );
   return rows.map(enrichCrmCompanyForApi);
 }
 

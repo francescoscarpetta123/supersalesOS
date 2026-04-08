@@ -10,6 +10,7 @@ import {
   externalDomainsFromFromLines,
 } from './crmDedupe.js';
 import { defaultDocs, defaultProducts, normalizePipelineStage } from './crmConstants.js';
+import { fallbackActivityBullets } from './crmActivityFormat.js';
 
 function maxInternalMs(summaries) {
   let best = 0;
@@ -170,12 +171,6 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
     );
     const lastMs = contacted > 0 ? contacted : Date.now();
 
-    const fallbackActivity = [latestSummary?.subject, latestSummary?.snippet]
-      .filter(Boolean)
-      .join('\n\n')
-      .trim()
-      .slice(0, 2000);
-
     const inferredPrimary = row?.primaryContact;
     const nameFromModel = String(inferredPrimary?.name || '').trim();
     const fromLatest = displayNameFromFromHeader(latestSummary?.from || '') || '';
@@ -199,9 +194,10 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
 
     const other = row?.otherContacts?.length ? row.otherContacts : [];
 
-    const lastActivitySummary = (row?.lastActivitySummary || fallbackActivity || '')
-      .trim()
-      .slice(0, 6000);
+    const lastActivitySummary = (
+      row?.lastActivitySummary?.trim() ||
+      fallbackActivityBullets(latestSummary?.subject, latestSummary?.snippet)
+    ).slice(0, 400);
 
     results.push({
       id: randomUUID(),

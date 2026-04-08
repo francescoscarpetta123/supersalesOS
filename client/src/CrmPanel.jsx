@@ -39,6 +39,24 @@ const PIPELINE_OPTIONS = [
   { id: 'closed_lost', label: 'Closed Lost' },
 ];
 
+function capWordsDisplay(s, maxWords = 10) {
+  const w = String(s ?? '')
+    .replace(/^[\s\-•*]+/u, '')
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  return w.slice(0, maxWords).join(' ');
+}
+
+function activityBulletLines(text) {
+  if (!text || !String(text).trim()) return [];
+  return String(text)
+    .split(/\n+/)
+    .map((l) => capWordsDisplay(l, 10))
+    .filter(Boolean)
+    .slice(0, 2);
+}
+
 function formatLastContacted(iso) {
   if (!iso) return '—';
   const t = new Date(iso).getTime();
@@ -143,7 +161,8 @@ function CompanyRow({ company, onPatch }) {
 
   const scheduleMeta = useDebouncedCallback(saveMeta, 450);
 
-  const activityText = (company.lastActivitySummary || '').trim() || '—';
+  const activityRaw = (company.lastActivitySummary || '').trim();
+  const bullets = activityBulletLines(activityRaw);
 
   return (
     <tr className="crm-row">
@@ -182,10 +201,14 @@ function CompanyRow({ company, onPatch }) {
         </select>
       </td>
       <td className="crm-td-activity">
-        {activityText === '—' ? (
+        {bullets.length === 0 ? (
           <p className="crm-activity-body crm-activity-body--empty">—</p>
         ) : (
-          <div className="crm-activity-body">{activityText}</div>
+          <ul className="crm-activity-list">
+            {bullets.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
         )}
       </td>
       <td className="crm-td-next">
