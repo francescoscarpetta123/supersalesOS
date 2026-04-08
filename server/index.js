@@ -19,8 +19,9 @@ import {
   getRuntimeSnapshot,
   stopPoller,
   triggerManualEmailProcessing,
+  getGoogleOAuthRedirectUri,
 } from './engine.js';
-import { resolvePublicUrl, listenPortEnv } from './publicUrl.js';
+import { listenPortEnv } from './publicUrl.js';
 
 const require = createRequire(import.meta.url);
 const fileStoreFactory = require('session-file-store');
@@ -331,7 +332,7 @@ if (servesDashboard) {
 app.listen(PORT, HOST, () => {
   const primary = HOST === '0.0.0.0' ? 'localhost' : HOST;
   console.log(`Super Sales OS — http://${primary}:${PORT}`);
-  console.log(`OAuth callback must match: ${resolvePublicUrl(PORT)}/auth/google/callback`);
+  console.log(`OAuth redirect URI (Google Cloud must match): ${getGoogleOAuthRedirectUri()}`);
   if (HOST === '0.0.0.0') {
     console.log('(LAN: use this machine’s IP on port ' + PORT + ' — add that callback URL in Google Cloud if needed.)');
   }

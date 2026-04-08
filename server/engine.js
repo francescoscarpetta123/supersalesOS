@@ -13,7 +13,6 @@ import { triageEmailBatch } from './triage.js';
 import { loadStore, addActionItems, bumpScanned, setIngestionFields } from './store.js';
 import { loadTokens, saveTokens, clearTokens, listAccountIds } from './tokens.js';
 import { saveProfile } from './profile.js';
-import { resolvePublicUrl } from './publicUrl.js';
 
 const TRIAGE_CHUNK = 12;
 
@@ -35,15 +34,18 @@ function profileFromIdToken(idToken) {
   }
 }
 
-function getRedirectUri() {
-  return `${resolvePublicUrl()}/auth/google/callback`;
+/** Exact Google OAuth redirect URI; must match Google Cloud Console. */
+export function getGoogleOAuthRedirectUri() {
+  const explicit = process.env.GOOGLE_REDIRECT_URI?.trim();
+  if (explicit) return explicit.replace(/\/$/, '');
+  throw new Error('Missing GOOGLE_REDIRECT_URI');
 }
 
 function oauth2Client() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const secret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !secret) throw new Error('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
-  return createOAuth2Client(clientId, secret, getRedirectUri());
+  return createOAuth2Client(clientId, secret, getGoogleOAuthRedirectUri());
 }
 
 export function getAuthorizeUrl({ state, loginHint } = {}) {
