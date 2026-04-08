@@ -34,6 +34,31 @@ function pickLatestSummary(summaries) {
   return best;
 }
 
+function sortSummariesChronological(summaries) {
+  return [...(summaries || [])].sort((a, b) => {
+    const na = Number(a.internalDate);
+    const nb = Number(b.internalDate);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+    if (Number.isFinite(na)) return -1;
+    if (Number.isFinite(nb)) return 1;
+    return 0;
+  });
+}
+
+/** Up to `limit` most recent unique messages (for body fetch + Claude context). */
+function pickRecentUniqueMessageIds(summaries, limit = 3) {
+  const chronological = sortSummariesChronological(summaries);
+  const out = [];
+  const seen = new Set();
+  for (let i = chronological.length - 1; i >= 0 && out.length < limit; i--) {
+    const id = chronological[i]?.messageId;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(chronological[i]);
+  }
+  return out;
+}
+
 function uniqueThreadGroups(summaries) {
   const byT = new Map();
   for (const s of summaries || []) {
@@ -89,15 +114,29 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
     const latest = pickLatestSummary(threadSummaries);
     if (!latest?.messageId) continue;
 
-    const body = await getMessagePlainText(gmail, latest.messageId);
-    const lines = [];
-    for (const s of threadSummaries) {
-      lines.push(`From: ${s.from}\nSubject: ${s.subject}\nDate: ${s.date}\nSnippet: ${s.snippet || ''}`);
+    const chronological = sortSummariesChronological(threadSummaries);
+    const outline = chronological
+      .map(
+        (s, i) =>
+          `--- Thread message ${i + 1} of ${chronological.length} (chronological) ---\nFrom: ${s.from}\nSubject: ${s.subject}\nDate: ${s.date}\nSnippet: ${s.snippet || ''}`
+      )
+      .join('\n\n');
+
+    const recentForBody = pickRecentUniqueMessageIds(threadSummaries, 3);
+    const bodyParts = [];
+    for (const s of recentForBody) {
+      const txt = await getMessagePlainText(gmail, s.messageId, 14_000);
+      bodyParts.push(
+        `=== Full message body (${s.date}) ===\nFrom: ${s.from}\nSubject: ${s.subject}\n\n${txt}`.trim()
+      );
     }
+    const bodyBundle = bodyParts.join('\n\n---\n\n');
+
+    const lines = [outline];
     for (const it of itemsByThread.get(threadId) || []) {
       lines.push(`Action item org: ${it.org || ''}\nSummary action: ${it.action || ''}`);
     }
-    const bundleText = `${lines.join('\n---\n')}\n---\n${body}`.trim();
+    const bundleText = `${lines.join('\n---\n')}\n---\nTHREAD BODIES (most recent; use for signatures + reply chains)\n${bodyBundle}`.trim();
 
     const primaryFrom = latest.from || fromLines[0] || '';
     const hints = {
@@ -133,17 +172,17 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
 
     const fallbackActivity = [latestSummary?.subject, latestSummary?.snippet]
       .filter(Boolean)
-      .join(' — ')
-      .replace(/\s+/g, ' ')
+      .join('\n\n')
       .trim()
-      .slice(0, 220);
+      .slice(0, 2000);
 
-    const fromPrimary = displayNameFromFromHeader(t.hints.fromLines?.[0] || '') || '';
     const inferredPrimary = row?.primaryContact;
+    const nameFromModel = String(inferredPrimary?.name || '').trim();
+    const fromLatest = displayNameFromFromHeader(latestSummary?.from || '') || '';
     const primary = {
       name:
-        String(inferredPrimary?.name || '').trim() ||
-        fromPrimary ||
+        nameFromModel ||
+        fromLatest ||
         (t.hints.primaryEmail ? t.hints.primaryEmail.split('@')[0] : '') ||
         '',
       title:
@@ -154,7 +193,9 @@ export async function syncCrmFromIngestionChunk({ userId, gmail, userEmail, summ
 
     const other = row?.otherContacts?.length ? row.otherContacts : [];
 
-    const lastActivitySummary = (row?.lastActivitySummary || fallbackActivity || '').trim().slice(0, 280);
+    const lastActivitySummary = (row?.lastActivitySummary || fallbackActivity || '')
+      .trim()
+      .slice(0, 6000);
 
     results.push({
       id: randomUUID(),

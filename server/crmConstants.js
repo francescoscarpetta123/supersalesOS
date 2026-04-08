@@ -96,23 +96,3 @@ export function normalizeCrmAccountKind(v) {
   }
   return 'customer_prospect';
 }
-
-/**
- * Hot ≤3d, Active ≤7d, Stale ≤14d, Cold older (by last contact).
- * @returns {'hot' | 'active' | 'stale' | 'cold'}
- */
-export function engagementTierFromLastContactMs(ms) {
-  if (ms == null || !Number.isFinite(Number(ms))) return 'cold';
-  const days = (Date.now() - Number(ms)) / 86_400_000;
-  if (days <= 3) return 'hot';
-  if (days <= 7) return 'active';
-  if (days <= 14) return 'stale';
-  return 'cold';
-}
-
-export const CRM_ENGAGEMENT_LABELS = {
-  hot: 'Hot',
-  active: 'Active',
-  stale: 'Stale',
-  cold: 'Cold',
-};

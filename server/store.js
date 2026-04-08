@@ -9,9 +9,9 @@ import {
   CRM_DOC_KEYS,
   normalizeCrmAccountKind,
   CRM_VENDOR_DOMAIN_BLOCKLIST,
-  engagementTierFromLastContactMs,
-  CRM_ENGAGEMENT_LABELS,
 } from './crmConstants.js';
+
+const CRM_ACTIVITY_SUMMARY_MAX = 6000;
 import { domainStemForKey } from './crmDedupe.js';
 
 const defaultStore = () => ({
@@ -230,18 +230,12 @@ function crmRowExcludedFromUi(r) {
 }
 
 function enrichCrmCompanyForApi(r) {
-  const withTs =
-    r.lastContactedAt != null || r.lastContactedMs == null || !Number.isFinite(Number(r.lastContactedMs))
-      ? r
-      : {
-          ...r,
-          lastContactedAt: new Date(Number(r.lastContactedMs)).toISOString(),
-        };
-  const engagementTier = engagementTierFromLastContactMs(withTs.lastContactedMs);
+  if (r.lastContactedAt != null || r.lastContactedMs == null || !Number.isFinite(Number(r.lastContactedMs))) {
+    return r;
+  }
   return {
-    ...withTs,
-    engagementTier,
-    engagementLabel: CRM_ENGAGEMENT_LABELS[engagementTier],
+    ...r,
+    lastContactedAt: new Date(Number(r.lastContactedMs)).toISOString(),
   };
 }
 
@@ -284,7 +278,7 @@ function mergeCrmSnapshotInto(target, incoming) {
   target.lastContactedAt = new Date(target.lastContactedMs).toISOString();
   target.threadIds = [...new Set([...(target.threadIds ?? []), ...(incoming.threadIds ?? [])])];
   if (incoming.lastActivitySummary != null && String(incoming.lastActivitySummary).trim()) {
-    target.lastActivitySummary = String(incoming.lastActivitySummary).trim().slice(0, 280);
+    target.lastActivitySummary = String(incoming.lastActivitySummary).trim().slice(0, CRM_ACTIVITY_SUMMARY_MAX);
   }
   if (!target.inferenceLocked) {
     if (incoming.companyName) target.companyName = incoming.companyName;

@@ -39,15 +39,6 @@ function useDebouncedCallback(fn, delay) {
   );
 }
 
-function EngagementPill({ tier, label }) {
-  const t = tier || 'cold';
-  return (
-    <span className={`crm-pill crm-pill--${t}`} title={`Engagement: ${label ?? t}`}>
-      {label ?? t}
-    </span>
-  );
-}
-
 function ContactCell({ company, onPatch }) {
   const [name, setName] = useState(company.primaryContact?.name ?? '');
   const [title, setTitle] = useState(company.primaryContact?.title ?? '');
@@ -71,7 +62,7 @@ function ContactCell({ company, onPatch }) {
   return (
     <div className="crm-contact-cell">
       <input
-        className="crm-input crm-input--sm"
+        className="crm-input crm-input--contact-name"
         type="text"
         value={name}
         onChange={(e) => {
@@ -79,11 +70,11 @@ function ContactCell({ company, onPatch }) {
           scheduleSave();
         }}
         onBlur={() => save()}
-        placeholder="Name"
-        aria-label="Primary contact name"
+        placeholder="Full name"
+        aria-label="Primary contact full name"
       />
       <input
-        className="crm-input crm-input--sm crm-input--muted"
+        className="crm-input crm-input--contact-title"
         type="text"
         value={title ?? ''}
         onChange={(e) => {
@@ -91,30 +82,23 @@ function ContactCell({ company, onPatch }) {
           scheduleSave();
         }}
         onBlur={() => save()}
-        placeholder="Title"
-        aria-label="Primary contact title"
+        placeholder="Job title"
+        aria-label="Primary contact job title"
       />
     </div>
   );
 }
 
-const COL_COUNT = 9;
-
 function CompanyRow({ company, onPatch }) {
-  const [expanded, setExpanded] = useState(false);
   const [companyName, setCompanyName] = useState(company.companyName ?? '');
   const [nextStep, setNextStep] = useState(company.nextStep ?? '');
-  const [nextDue, setNextDue] = useState(
-    company.nextStepDue ? String(company.nextStepDue).slice(0, 10) : ''
-  );
   const [pipelineStage, setPipelineStage] = useState(company.pipelineStage ?? 'lead');
 
   useEffect(() => {
     setCompanyName(company.companyName ?? '');
     setNextStep(company.nextStep ?? '');
-    setNextDue(company.nextStepDue ? String(company.nextStepDue).slice(0, 10) : '');
     setPipelineStage(company.pipelineStage ?? 'lead');
-  }, [company.id, company.companyName, company.nextStep, company.nextStepDue, company.pipelineStage]);
+  }, [company.id, company.companyName, company.nextStep, company.pipelineStage]);
 
   const patch = useCallback(
     (body) => {
@@ -127,120 +111,71 @@ function CompanyRow({ company, onPatch }) {
     patch({
       companyName,
       nextStep,
-      nextStepDue: nextDue === '' ? null : nextDue,
     });
-  }, [patch, companyName, nextStep, nextDue]);
+  }, [patch, companyName, nextStep]);
 
   const scheduleMeta = useDebouncedCallback(saveMeta, 450);
 
   const activityText = (company.lastActivitySummary || '').trim() || '—';
 
   return (
-    <>
-      <tr className="crm-row">
-        <td className="crm-td-company">
-          <input
-            className="crm-input crm-input--company"
-            type="text"
-            value={companyName}
-            onChange={(e) => {
-              setCompanyName(e.target.value);
-              scheduleMeta();
-            }}
-            onBlur={() => saveMeta()}
-            aria-label="Company name"
-          />
-        </td>
-        <td>
-          <ContactCell company={company} onPatch={patch} />
-        </td>
-        <td className="crm-td-other">
-          {(company.otherContacts ?? []).length > 0 ? (
-            <button
-              type="button"
-              className="crm-expand"
-              onClick={() => setExpanded((e) => !e)}
-              aria-expanded={expanded}
-            >
-              {expanded ? 'Hide' : `${(company.otherContacts ?? []).length} other`}
-            </button>
-          ) : (
-            <span className="crm-no-others">—</span>
-          )}
-        </td>
-        <td className="crm-td-status">
-          <EngagementPill tier={company.engagementTier} label={company.engagementLabel} />
-        </td>
-        <td className="crm-td-stage">
-          <select
-            className="crm-select"
-            value={pipelineStage}
-            onChange={(e) => {
-              const v = e.target.value;
-              setPipelineStage(v);
-              patch({ pipelineStage: v });
-            }}
-            aria-label="Pipeline stage"
-          >
-            {PIPELINE_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </td>
-        <td className="crm-td-activity">
-          <p className="crm-activity-line" title={activityText === '—' ? undefined : activityText}>
-            {activityText}
-          </p>
-        </td>
-        <td className="crm-td-next">
-          <textarea
-            className="crm-textarea"
-            rows={3}
-            value={nextStep}
-            onChange={(e) => {
-              setNextStep(e.target.value);
-              scheduleMeta();
-            }}
-            onBlur={() => saveMeta()}
-            placeholder="Next step"
-          />
-        </td>
-        <td className="crm-td-due">
-          <input
-            className="crm-input"
-            type="date"
-            value={nextDue}
-            onChange={(e) => {
-              setNextDue(e.target.value);
-              scheduleMeta();
-            }}
-            onBlur={() => saveMeta()}
-            aria-label="Next step due"
-          />
-        </td>
-        <td className="crm-td-last">{formatLastContacted(company.lastContactedAt)}</td>
-      </tr>
-      {expanded && (company.otherContacts ?? []).length > 0 ? (
-        <tr className="crm-row crm-row--sub">
-          <td colSpan={COL_COUNT}>
-            <div className="crm-others">
-              <span className="crm-others-label">Other contacts</span>
-              <ul className="crm-others-list">
-                {(company.otherContacts ?? []).map((c, i) => (
-                  <li key={`${c.email || ''}-${c.name || ''}-${i}`}>
-                    <span className="crm-others-name">{c.name || '—'}</span>
-                    {c.title ? <span className="crm-others-title">{c.title}</span> : null}
-                    {c.email ? <span className="crm-others-email">{c.email}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <tr className="crm-row">
+      <td className="crm-td-company">
+        <input
+          className="crm-input crm-input--company"
+          type="text"
+          value={companyName}
+          onChange={(e) => {
+            setCompanyName(e.target.value);
+            scheduleMeta();
+          }}
+          onBlur={() => saveMeta()}
+          aria-label="Company name"
+        />
+      </td>
+      <td className="crm-td-primary">
+        <ContactCell company={company} onPatch={patch} />
+      </td>
+      <td className="crm-td-stage">
+        <select
+          className="crm-select"
+          value={pipelineStage}
+          onChange={(e) => {
+            const v = e.target.value;
+            setPipelineStage(v);
+            patch({ pipelineStage: v });
+          }}
+          aria-label="Pipeline stage"
+        >
+          {PIPELINE_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="crm-td-activity">
+        {activityText === '—' ? (
+          <p className="crm-activity-body crm-activity-body--empty">—</p>
+        ) : (
+          <div className="crm-activity-body">{activityText}</div>
+        )}
+      </td>
+      <td className="crm-td-next">
+        <textarea
+          className="crm-textarea crm-textarea--next"
+          rows={2}
+          value={nextStep}
+          onChange={(e) => {
+            setNextStep(e.target.value);
+            scheduleMeta();
+          }}
+          onBlur={() => saveMeta()}
+          placeholder="Next step"
+        />
+      </td>
+      <td className="crm-td-last">{formatLastContacted(company.lastContactedAt)}</td>
+    </tr>
   );
 }
 
@@ -334,12 +269,9 @@ export default function CrmPanel({ active, authenticated, connected, initialInge
               <tr>
                 <th>Company</th>
                 <th>Primary contact</th>
-                <th>Other</th>
-                <th>Status</th>
                 <th>Stage</th>
                 <th>Last activity</th>
                 <th>Next step</th>
-                <th>Due</th>
                 <th>Last contacted</th>
               </tr>
             </thead>

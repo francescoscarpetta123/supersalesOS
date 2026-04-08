@@ -68,14 +68,14 @@ Return ONLY a raw JSON array (no markdown fences). One object per thread, same o
 - threadId (string — MUST match input)
 - accountKind (string — exactly one of: customer_prospect, vendor_service)
 - companyName (string — best display name for the company)
-- primaryContact: { name (string), title (string or null) } for the main external person in the thread when known
-- otherContacts: array of { name, title or null, email or null } for additional external people (exclude the primary)
+- primaryContact: { name (string — full name), title (string or null — job title exactly as in signature when present) } Identify the SINGLE external person at this company who matters most for the relationship: NOT simply the author of the first or latest email, but whoever shows the most substantive back-and-forth with the inbox owner (replies, decisions, scheduling, questions). Use the full thread: signatures, quoted replies, and “On … wrote:” chains. Prefer facility/operator buyers and economic buyers over incidental CCs. If unclear, best evidence from signatures and conversation flow.
+- otherContacts: array of { name, title or null, email or null } for other notable external people (exclude the primary)
 - pipelineStage (string — exactly one of: ${CRM_PIPELINE_STAGES.join(', ')})
 - productsInterested: object with boolean keys: adrs, tripleCheck, pdpm, workflow, superGpt (use false when unknown)
 - documentsSigned: object with boolean keys: baa, msa, sow (true only if the email clearly states these are signed/executed)
 - nextStep (string — concise next action; may be empty)
 - nextStepDue (string YYYY-MM-DD or null)
-- lastActivitySummary (string — ONE short line, max ~140 chars, describing the most recent email interaction, e.g. subject + what happened; no newlines)
+- lastActivitySummary (string — complete narrative of the most recent meaningful interaction: what was said, who said it, and next implied move. Use multiple sentences and line breaks if helpful; be thorough, not terse)
 
 Account classification (critical):
 - customer_prospect: organizations you or the inbox owner are selling to, partnering with as a customer, or engaging as a sales prospect — especially SNFs, skilled nursing, healthcare facilities, health systems, senior care operators, hospitals, medical groups, and similar buyers. Named B2B prospects discussing demos, pricing, pilots, contracts.
@@ -103,7 +103,7 @@ ${JSON.stringify(
       threadId: t.threadId,
       canonicalKey: t.canonicalKey,
       hints: t.hints,
-      text: t.bundleText.slice(0, 24_000),
+      text: t.bundleText.slice(0, 48_000),
     })),
     null,
     2
@@ -149,7 +149,7 @@ ${JSON.stringify(
       nextStep: r.nextStep == null ? '' : String(r.nextStep),
       nextStepDue:
         r.nextStepDue == null || r.nextStepDue === '' ? null : String(r.nextStepDue).slice(0, 10),
-      lastActivitySummary: summaryRaw.slice(0, 280),
+      lastActivitySummary: summaryRaw.slice(0, 6000),
     });
   }
   return out;
