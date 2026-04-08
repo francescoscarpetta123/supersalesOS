@@ -9,7 +9,14 @@ import cors from 'cors';
 import session from 'express-session';
 import { CLIENT_DIST, ensureSessionDir } from './paths.js';
 import { loadTokens } from './tokens.js';
-import { markActionDone, getStoreSnapshot, normalizeCategory, itemActivityMs } from './store.js';
+import {
+  markActionDone,
+  getStoreSnapshot,
+  normalizeCategory,
+  itemActivityMs,
+  listCrmCompaniesSorted,
+  patchCrmCompany,
+} from './store.js';
 import { loadProfile } from './profile.js';
 import {
   getAuthorizeUrl,
@@ -283,6 +290,23 @@ app.post('/api/scan', requireSessionUser, (req, res) => {
     console.error('[manual scan]', userId, err);
   });
   res.status(202).json({ ok: true });
+});
+
+app.get('/api/crm/companies', requireSessionUser, (req, res) => {
+  const userId = req.session.userId;
+  const store = getStoreSnapshot(userId);
+  res.json({
+    companies: listCrmCompaniesSorted(userId),
+    lastSyncedAt: store.crmLastSyncedAt ?? null,
+  });
+});
+
+app.patch('/api/crm/companies/:id', requireSessionUser, (req, res) => {
+  const userId = req.session.userId;
+  const { id } = req.params;
+  const r = patchCrmCompany(userId, id, req.body ?? {});
+  if (!r.ok) return res.status(404).json({ error: r.error || 'Not found' });
+  res.json({ company: r.company });
 });
 
 app.patch('/api/action-items/:id', requireSessionUser, (req, res) => {

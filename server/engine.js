@@ -12,7 +12,8 @@ import {
 import { triageEmailBatch } from './triage.js';
 import { loadStore, addActionItems, bumpScanned, setIngestionFields } from './store.js';
 import { loadTokens, saveTokens, clearTokens, listAccountIds } from './tokens.js';
-import { saveProfile } from './profile.js';
+import { saveProfile, loadProfile } from './profile.js';
+import { syncCrmFromIngestionChunk } from './crmSync.js';
 
 const TRIAGE_CHUNK = 12;
 
@@ -184,6 +185,18 @@ async function processNewMessageIds(userId, gmail, ids, label) {
     );
     addActionItems(userId, items, slice, summaries);
     bumpScanned(userId, slice.length);
+    try {
+      const profile = loadProfile(userId);
+      await syncCrmFromIngestionChunk({
+        userId,
+        gmail,
+        userEmail: profile?.email ?? null,
+        summaries,
+        triageItems: items,
+      });
+    } catch (e) {
+      console.error('[crm sync]', userId, e?.message || e);
+    }
     if (label === 'initial') {
       const total = r.ingestionProgress?.total ?? pending.length;
       const processed = (r.ingestionProgress?.processed ?? 0) + slice.length;

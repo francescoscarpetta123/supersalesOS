@@ -59,6 +59,70 @@ export async function listMessagesInWindow(gmail, query, onPageIds) {
   } while (pageToken);
 }
 
+function decodeBase64Url(data) {
+  if (!data || typeof data !== 'string') return '';
+  try {
+    return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function collectTextParts(payload, plainParts, htmlParts) {
+  if (!payload) return;
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    plainParts.push(decodeBase64Url(payload.body.data));
+  } else if (payload.mimeType === 'text/html' && payload.body?.data) {
+    htmlParts.push(decodeBase64Url(payload.body.data));
+  }
+  if (Array.isArray(payload.parts)) {
+    for (const p of payload.parts) collectTextParts(p, plainParts, htmlParts);
+  }
+}
+
+function htmlToRoughText(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Fetch full message and return best-effort plain text (for CRM / signatures). Capped for token safety.
+ */
+export async function getMessagePlainText(gmail, messageId, maxChars = 48_000) {
+  try {
+    const msg = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full',
+    });
+    const plain = [];
+    const html = [];
+    collectTextParts(msg.data.payload, plain, html);
+    let text = plain.filter(Boolean).join('\n\n');
+    if (!text.trim() && html.length) text = html.map(htmlToRoughText).join('\n\n');
+    const snippet = (msg.data.snippet ?? '').trim();
+    if (snippet && !text.includes(snippet.slice(0, Math.min(40, snippet.length)))) {
+      text = `${text}\n\n---\n${snippet}`.trim();
+    }
+    if (text.length > maxChars) text = text.slice(0, maxChars);
+    return text;
+  } catch {
+    return '';
+  }
+}
+
 export async function getMessageSummaries(gmail, messageIds, batchSize = 8) {
   const results = [];
   for (let start = 0; start < messageIds.length; start += batchSize) {

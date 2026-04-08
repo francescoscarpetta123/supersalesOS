@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CrmPanel from './CrmPanel.jsx';
 import './App.css';
 
 const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? '';
@@ -49,6 +50,7 @@ function categoryClass(cat) {
 }
 
 export default function App() {
+  const [mainTab, setMainTab] = useState('email');
   const [status, setStatus] = useState(null);
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -185,7 +187,7 @@ export default function App() {
     connected && progress && (progress.phase === 'listing' || progress.phase === 'triage');
 
   return (
-    <div className="app">
+    <div className={`app ${mainTab === 'crm' ? 'app--wide' : ''}`}>
       <header className="header">
         <div className="header-main">
           <h1 className="app-title">Super Sales OS</h1>
@@ -275,106 +277,140 @@ export default function App() {
         </div>
       )}
 
-      <div className="toolbar-block">
-        <div className="toolbar-row">
-          <span className="toolbar-label">Urgency</span>
-          <div className="chips">
-            {URGENCIES.map((u) => (
-              <button
-                key={u}
-                type="button"
-                className={`chip urgency ${filter === u ? 'active' : ''}`}
-                onClick={() => setFilter(u)}
-              >
-                {u === 'all' ? 'All' : u.charAt(0).toUpperCase() + u.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="toolbar-row">
-          <span className="toolbar-label">Category</span>
-          <div className="chips">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`chip ${c.id} ${categoryFilter === c.id ? 'active' : ''}`}
-                onClick={() => setCategoryFilter(c.id)}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <div className="app-columns">
+        <nav className="main-nav" aria-label="Sections">
+          <button
+            type="button"
+            className={`main-nav-btn ${mainTab === 'email' ? 'active' : ''}`}
+            onClick={() => setMainTab('email')}
+          >
+            Email manager
+          </button>
+          <button
+            type="button"
+            className={`main-nav-btn ${mainTab === 'crm' ? 'active' : ''}`}
+            onClick={() => setMainTab('crm')}
+          >
+            CRM
+          </button>
+        </nav>
 
-      <div className="filter-toggle-row">
-        <button
-          type="button"
-          className="text-link"
-          onClick={() => setShowAllIngested((v) => !v)}
-        >
-          {showAllIngested ? 'Show recent only' : 'Show older items'}
-        </button>
-      </div>
-
-      <section className="list">
-        {items.length === 0 ? (
-          <div className="empty">
-            {!authenticated
-              ? 'Use Connect Gmail in the top right to sign in.'
-              : connected
-                ? !initialIngestionComplete
-                  ? 'Use Scan inbox in the top right to load your messages.'
-                  : 'No open items for this view. Try another category or urgency, or expand the list below.'
-                : 'Use Connect Gmail in the top right to link your inbox.'}
-          </div>
-        ) : (
-          items.map((item) => {
-            const cat = categoryClass(item.category);
-            return (
-              <article key={item.id} className="card">
-                <div className={`urgency-bar ${urgencyBarClass(item.urgency)}`} aria-hidden />
-                <div className="card-body">
-                  <div className="card-top">
-                    <div>
-                      <div className="sender">{item.sender || 'Unknown sender'}</div>
-                      {item.org ? <div className="org">{item.org}</div> : null}
-                    </div>
-                    <span className={`cat-pill ${cat}`}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                    </span>
-                  </div>
-                  <p className="action-text">{item.action}</p>
-                  <div className="card-meta">
-                    {item.subject ? <span className="meta-item">{item.subject}</span> : null}
-                    {item.deadline ? <span className="meta-item deadline">Due {item.deadline}</span> : null}
-                    <a
-                      className="meta-link"
-                      href={`https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(item.threadId)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open thread
-                    </a>
+        <div className="main-content">
+          {mainTab === 'email' ? (
+            <>
+              <div className="toolbar-block">
+                <div className="toolbar-row">
+                  <span className="toolbar-label">Urgency</span>
+                  <div className="chips">
+                    {URGENCIES.map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        className={`chip urgency ${filter === u ? 'active' : ''}`}
+                        onClick={() => setFilter(u)}
+                      >
+                        {u === 'all' ? 'All' : u.charAt(0).toUpperCase() + u.slice(1)}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="card-actions">
-                  <button
-                    type="button"
-                    className="btn-check"
-                    disabled={busyId === item.id}
-                    onClick={() => markDone(item.id)}
-                    title="Mark done"
-                  >
-                    {busyId === item.id ? '…' : '✓'}
-                  </button>
+                <div className="toolbar-row">
+                  <span className="toolbar-label">Category</span>
+                  <div className="chips">
+                    {CATEGORIES.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`chip ${c.id} ${categoryFilter === c.id ? 'active' : ''}`}
+                        onClick={() => setCategoryFilter(c.id)}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </article>
-            );
-          })
-        )}
-      </section>
+              </div>
+
+              <div className="filter-toggle-row">
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() => setShowAllIngested((v) => !v)}
+                >
+                  {showAllIngested ? 'Show recent only' : 'Show older items'}
+                </button>
+              </div>
+
+              <section className="list">
+                {items.length === 0 ? (
+                  <div className="empty">
+                    {!authenticated
+                      ? 'Use Connect Gmail in the top right to sign in.'
+                      : connected
+                        ? !initialIngestionComplete
+                          ? 'Use Scan inbox in the top right to load your messages.'
+                          : 'No open items for this view. Try another category or urgency, or expand the list below.'
+                        : 'Use Connect Gmail in the top right to link your inbox.'}
+                  </div>
+                ) : (
+                  items.map((item) => {
+                    const cat = categoryClass(item.category);
+                    return (
+                      <article key={item.id} className="card">
+                        <div className={`urgency-bar ${urgencyBarClass(item.urgency)}`} aria-hidden />
+                        <div className="card-body">
+                          <div className="card-top">
+                            <div>
+                              <div className="sender">{item.sender || 'Unknown sender'}</div>
+                              {item.org ? <div className="org">{item.org}</div> : null}
+                            </div>
+                            <span className={`cat-pill ${cat}`}>
+                              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                            </span>
+                          </div>
+                          <p className="action-text">{item.action}</p>
+                          <div className="card-meta">
+                            {item.subject ? <span className="meta-item">{item.subject}</span> : null}
+                            {item.deadline ? (
+                              <span className="meta-item deadline">Due {item.deadline}</span>
+                            ) : null}
+                            <a
+                              className="meta-link"
+                              href={`https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(item.threadId)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open thread
+                            </a>
+                          </div>
+                        </div>
+                        <div className="card-actions">
+                          <button
+                            type="button"
+                            className="btn-check"
+                            disabled={busyId === item.id}
+                            onClick={() => markDone(item.id)}
+                            title="Mark done"
+                          >
+                            {busyId === item.id ? '…' : '✓'}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })
+                )}
+              </section>
+            </>
+          ) : (
+            <CrmPanel
+              active={mainTab === 'crm'}
+              authenticated={authenticated}
+              connected={connected}
+              initialIngestionComplete={initialIngestionComplete}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
